@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head><style>
+@font-face {
+  font-family: "Optimistic";
+  font-style: normal;
+  font-weight: 400 600;
+  font-display: swap;
+  src: url("/fonts/OptimisticAI_VF_Optimized.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Optimistic Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/OptimisticMono_W_TextRegular.woff2") format("woff2");
+}
+:where(html) {
+  font-family: "Optimistic", system-ui, sans-serif;
+}
+:where(code, pre, kbd, samp) {
+  font-family: "Optimistic Mono", ui-monospace, monospace;
+}
+</style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Académie des Brothers - V4 Sécurisée</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet">
+<style>body{font-family:'Plus Jakarta Sans',system-ui;background:#f7f8ff}</style>
+</head>
+<body class="min-h-screen">
+<div id="app"></div>
+<script>
+const SUPA_URL="https://augzkbizczawmjkfiqao.supabase.co";
+const SUPA_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.[STRIPPED 127 bytes].Ajr0eggc7XMxR1NYIR3CSiUTITOmNhSGLvIy7odMSTs";
+const HEADERS={apikey:SUPA_KEY,Authorization:`Bearer ${SUPA_KEY}`,"Content-Type":"application/json"};
+const USERS=[
+ {id:"Ethan",pw:"2016",name:"Ethan",age:10,classe:"CM2",role:"eleve",color:"bg-violet-600"},
+ {id:"Noha",pw:"2017",name:"Noha",age:9,classe:"CM1",role:"eleve",color:"bg-blue-600"},
+ {id:"Brian",pw:"2020",name:"Brian",age:6,classe:"CP",role:"eleve",color:"bg-emerald-600"},
+ {id:"jaysee.bitsindou",pw:"Geoffrey.bitsindou86",name:"Jaysee",role:"prof",color:"bg-zinc-900"},
+];
+const EXOS={
+ CM2:{maths:[{q:"23 × 14 = ?",a:322,h:"20×14=280+3×14=42"},{q:"3/4 + 1/4 = ?",a:"1",opts:["1","2","3/4"]},{q:"Aire 12cm × 8cm ?",a:96}],musique:[{q:"Famille du violon 🎻 ?",opts:["Cordes frottées","Percussions"],a:"Cordes frottées"},{q:"Une ronde dure ?",opts:["4 temps","1 temps"],a:"4 temps"}],espagnol:[{q:"'Je m'appelle Ethan'",opts:["Me llamo Ethan","Soy Ethan"],a:"Me llamo Ethan"},{q:"Merci beaucoup ?",opts:["Muchas gracias","Hola"],a:"Muchas gracias"}]},
+ CM1:{maths:[{q:"7 × 8 = ?",a:56},{q:"53 - 27 = ?",a:26},{q:"4 paquets de 12 gâteaux ?",a:48}],musique:[{q:"Piano = Cordes ?",opts:["Frappées","Vent"],a:"Frappées"},{q:"Boum Boum 🥁 ?",opts:["Batterie","Flûte"],a:"Batterie"}],espagnol:[{q:"Rojo = ? 🔴",opts:["Rouge","Bleu"],a:"Rouge"},{q:"Bleu en espagnol ?",opts:["Azul","Verde"],a:"Azul"}]},
+ CP:{maths:[{q:"🍎🍎 + 🍎 = ?",a:3,big:true},{q:"⭐⭐⭐⭐⭐ + ⭐⭐ = ?",a:7,big:true},{q:"4 - 2 = ?",a:2,big:true}],musique:[{q:"Miaou 🐱 ?",opts:["Chat","Chien"],a:"Chat"},{q:"Wouf 🐶 ?",opts:["Wouf Wouf 🐶","Meuh"],a:"Wouf Wouf 🐶"}],espagnol:[{q:"Bonjour 👋 ?",opts:["Hola 😊","Adiós"],a:"Hola 😊"},{q:"Merci ?",opts:["Gracias 🙏","Hola"],a:"Gracias 🙏"}]},
+};
+let user=JSON.parse(localStorage.getItem("acad_user")||"null");
+let travaux=[],messages=[],tab="maths",answers={},scores={},started={},msgText="",status="connecting";
+async function load(){
+ try{
+  const t=await fetch(SUPA_URL+"/rest/v1/travaux?select=*&order=created_at.desc",{headers:HEADERS}).then(r=>r.json());
+  const m=await fetch(SUPA_URL+"/rest/v1/messages?select=*&order=created_at.asc",{headers:HEADERS}).then(r=>r.json());
+  if(Array.isArray(t)) travaux=t;
+  if(Array.isArray(m)) messages=m;
+  status="online";
+ }catch(e){status="offline";}
+ render();
+}
+async function sendTravail(matiere,note,detail){
+ const body={eleve:user.name,classe:user.classe||"Prof",matiere,note,details:JSON.stringify(detail)};
+ await fetch(SUPA_URL+"/rest/v1/travaux",{method:"POST",headers:HEADERS,body:JSON.stringify(body)});
+ load();
+}
+async function sendMsg(){
+ if(!msgText.trim())return;
+ const body={auteur:user.name,role:user.role,texte:msgText};
+ msgText="";
+ await fetch(SUPA_URL+"/rest/v1/messages",{method:"POST",headers:HEADERS,body:JSON.stringify(body)});
+ load();
+}
+function login(){
+ const id=document.getElementById("login-id").value.trim();
+ const pw=document.getElementById("login-pw").value.trim();
+ const found=USERS.find(u=>u.id.toLowerCase()===id.toLowerCase() && u.pw===pw);
+ if(!found){document.getElementById("login-err").innerText="❌ Identifiant ou mot de passe incorrect";return;}
+ localStorage.setItem("acad_user",JSON.stringify(found)); user=found; render(); load();
+}
+function logout(){localStorage.removeItem("acad_user");user=null;render();}
+function render(){
+ const app=document.getElementById("app");
+ if(!user){
+  app.innerHTML=`<div class="min-h-screen grid place-items-center p-6"><div class="w-full max-w-[420px] bg-white rounded-[32px] shadow-2xl border p-8">
+   <div class="w-14 h-14 rounded-2xl bg-zinc-900 grid place-items-center text-white text-xl">🔒</div>
+   <h1 class="mt-6 text-[28px] font-extrabold leading-tight">Académie des<br>Brothers</h1>
+   <p class="text-[13px] text-zinc-500 mt-2">Ethan 10 ans CM2 • Noha 9 ans CM1 • Brian 6 ans CP • Sécurisé</p>
+   <div class="mt-8 space-y-4">
+    <input id="login-id" placeholder="Identifiant" class="w-full h-12 rounded-2xl border px-4 outline-none focus:ring-4 focus:ring-violet-100">
+    <div class="relative"><input id="login-pw" type="password" placeholder="Mot de passe" class="w-full h-12 rounded-2xl border px-4 pr-12 outline-none focus:ring-4 focus:ring-violet-100"><button onclick="const i=document.getElementById('login-pw');i.type=i.type==='password'?'text':'password'" class="absolute right-2 top-2 w-8 h-8 rounded-full bg-zinc-100 grid place-items-center text-sm">👁️</button></div>
+    <div id="login-err" class="text-[12px] text-red-600 font-bold min-h-[18px]"></div>
+    <button onclick="login()" class="w-full h-12 rounded-2xl bg-zinc-900 text-white font-bold">Se connecter</button>
+    <div class="text-[11px] text-zinc-400 p-3 rounded-xl bg-zinc-50 border">Nouveau prof: jaysee.bitsindou / Geoffrey.bitsindou86<br>Élèves: Ethan/2016 • Noha/2017 • Brian/2020</div>
+   </div></div></div>`;
+  return;
+ }
+ const exos=EXOS[user.classe]||{maths:[],musique:[],espagnol:[]};
+ const tabs = user.role==="prof" ? ["eleves","maths","musique","espagnol","messages"] : ["maths","musique","espagnol","messages","travail"];
+ app.innerHTML=`
+ <header class="sticky top-0 z-20 backdrop-blur bg-white/80 border-b"><div class="max-w-[1200px] mx-auto px-6 h-[64px] flex items-center justify-between">
+  <div class="flex items-center gap-3"><div class="w-9 h-9 rounded-xl bg-zinc-900 grid place-items-center text-white">🎓</div><b>Académie</b><span class="text-[11px] px-2 py-1 rounded-full ${status==="online"?"bg-emerald-100 text-emerald-700":"bg-amber-100 text-amber-700"}">${status==="online"?"🟢 Connecté Supabase":"🟠 "+status}</span></div>
+  <div class="flex items-center gap-2"><span class="text-[12px] font-bold">${user.name} • ${user.classe||"Prof"} ${user.age?user.age+" ans":""}</span><button onclick="logout()" class="h-8 px-3 rounded-full bg-zinc-100 text-[12px] font-bold">Déconnexion</button></div>
+ </div></header>
+ <main class="max-w-[1200px] mx-auto px-6 py-8">
+  <div class="flex gap-2 flex-wrap mb-6">${tabs.map(t=>`<button onclick="tab='${t}';render()" class="h-10 px-5 rounded-full text-[13px] font-bold border ${tab===t?'bg-zinc-900 text-white border-zinc-900':'bg-white'}">${t.toUpperCase()}</button>`).join("")}</div>
+  <div id="content"></div>
+ </main>`;
+ const content=document.getElementById("content");
+ if(user.role==="prof" && tab==="eleves"){
+  const counts={Ethan:travaux.filter(x=>x.eleve==="Ethan").length,Noha:travaux.filter(x=>x.eleve==="Noha").length,Brian:travaux.filter(x=>x.eleve==="Brian").length};
+  content.innerHTML=`<div class="grid md:grid-cols-3 gap-4">${["Ethan","Noha","Brian"].map(n=>{
+   const u=USERS.find(x=>x.name===n);
+   return `<div class="bg-white rounded-[28px] border shadow p-6"><div class="flex items-center gap-3"><div class="w-10 h-10 rounded-xl ${u.color} grid place-items-center text-white font-bold">${n[0]}</div><div><div class="font-bold">${n} • ${u.age} ans • ${u.classe}</div><div class="text-[12px] text-zinc-500">${counts[n]} travaux rendus</div></div></div><div class="mt-4 text-[12px]">${travaux.filter(t=>t.eleve===n).slice(0,3).map(t=>`<div class='flex justify-between border-b py-1'><span>${t.matiere}</span><span class='font-bold'>${t.note}/20</span></div>`).join("")||"<div class='text-zinc-400'>Aucun cours effectué</div>"}</div></div>`
+  }).join("")}</div>
+  <div class="mt-8 bg-white rounded-[28px] border shadow p-6"><h3 class="font-bold mb-4">Tous les travaux (temps réel)</h3><div class="space-y-2 max-h-[400px] overflow-auto">${travaux.length===0?`<div class='text-zinc-400 text-[13px]'>Aucun travail rendu pour l'instant</div>`:travaux.map(t=>`<div class='flex justify-between items-center border rounded-xl p-3 text-[13px]'><div><b>${t.eleve}</b> • ${t.classe} • ${t.matiere} • ${new Date(t.created_at).toLocaleString("fr-FR")}<div class='text-[11px] text-zinc-500 truncate max-w-[40ch]'>${t.details}</div></div><span class='px-3 py-1 rounded-full bg-violet-600 text-white font-bold'>${t.note}/20</span></div>`).join("")}</div></div>`;
+ }else if(tab==="messages"){
+  content.innerHTML=`<div class="bg-white rounded-[28px] border shadow p-6"><div class="h-[380px] overflow-auto bg-[#f7f8ff] rounded-2xl border p-3 space-y-2">${messages.length===0?`<div class='py-20 text-center text-zinc-400 text-[13px]'>Aucun message</div>`:messages.map(m=>`<div class='max-w-[80%] rounded-2xl border p-3 text-[13px] ${m.auteur===user.name?'bg-zinc-900 text-white ml-auto':'bg-white'}'><b>${m.auteur}</b> <span class='text-[10px] opacity-70'>${m.role}</span><div>${m.texte}</div></div>`).join("")}</div><div class="mt-4 flex gap-2"><input id="msg-input" value="${msgText.replace(/"/g,'&quot;')}" placeholder="Message groupe..." class="flex-1 h-12 rounded-2xl border px-4"><button onclick="msgText=document.getElementById('msg-input').value;sendMsg()" class="h-12 px-5 rounded-2xl bg-zinc-900 text-white font-bold">Envoyer</button></div></div>`;
+  document.getElementById("msg-input")?.addEventListener("input",e=>msgText=e.target.value);
+  document.getElementById("msg-input")?.addEventListener("keydown",e=>{if(e.key==="Enter"){msgText=e.target.value;sendMsg();}});
+ }else if(["maths","musique","espagnol"].includes(tab)){
+  const list=exos[tab]||[];
+  content.innerHTML=`<div class="bg-white rounded-[28px] border shadow p-6"><h3 class="font-bold text-[18px] capitalize">${tab} - ${user.classe}</h3><div class="mt-6 space-y-4">${list.map((ex,i)=>{
+   const key=tab+"-"+i;
+   const isStarted=started[key];
+   const score=scores[key];
+   return `<div class="rounded-2xl border p-5 ${ex.big?'text-[18px]':''}"><div class="font-bold">${i+1}. ${ex.q}</div>
+   ${ex.opts?`<div class="mt-3 grid gap-2">${ex.opts.map(o=>`<label class='flex items-center gap-2 border rounded-xl p-3 cursor-pointer hover:bg-zinc-50'><input type='radio' name='${key}' value="${o}" onchange="answers['${key}']='${o.replace(/'/g,"\\'")}';render()"> ${o}</label>`).join("")}</div>`:`<input id='ans-${key}' placeholder='Ta réponse' class='mt-3 w-full h-12 rounded-xl border px-4' value="${answers[key]||''}" oninput="answers['${key}']=this.value">`}
+   ${ex.h?`<div class='text-[11px] text-zinc-400 mt-2'>💡 ${ex.h}</div>`:''}
+   ${score?`<div class='mt-3 text-[13px] font-bold ${score.ok?'text-emerald-600':'text-red-600'}'>${score.ok?'✅ Correct':'❌ Faux, réponse: '+ex.a} • Note ${score.ok?20:0}/20</div>`:''}
+   ${!score?`<button onclick="corrige('${tab}',${i})" class='mt-4 h-10 px-5 rounded-full bg-zinc-900 text-white font-bold text-[13px]'>Corriger → Envoyer à Jaysee</button>`:''}
+   </div>`;
+  }).join("")}</div></div>`;
+ }else if(tab==="travail"){
+  const mine=travaux.filter(t=>t.eleve===user.name);
+  content.innerHTML=`<div class="bg-white rounded-[28px] border shadow p-6"><h3 class="font-bold">Mon travail</h3>${mine.length===0?`<div class='mt-8 py-16 text-center bg-[#f7f8ff] rounded-2xl border'><div class='text-3xl'>📚</div><div class='font-bold mt-2'>Aucun cours effectué</div><div class='text-[12px] text-zinc-500'>Fais un exo en Maths, Musique ou Espagnol</div></div>`:`<div class='mt-4 space-y-2'>${mine.map(t=>`<div class='border rounded-xl p-3 flex justify-between'><div><b>${t.matiere}</b> • ${t.note}/20 • ${new Date(t.created_at).toLocaleDateString()}<div class='text-[11px] text-zinc-500'>${t.details.slice(0,120)}</div></div><span class='text-emerald-600 font-bold'>✅</span></div>`).join("")}</div>`}</div>`;
+ }
+}
+function corrige(tab,idx){
+ const key=tab+"-"+idx;
+ const list=EXOS[user.classe][tab];
+ const ex=list[idx];
+ const input=document.getElementById("ans-"+key);
+ if(input) answers[key]=input.value;
+ const rep=(answers[key]||"").trim();
+ if(!rep){alert("Écris une réponse !");return;}
+ let ok=false;
+ if(ex.opts){ ok=rep===ex.a; } else {
+  const num=parseInt(rep); ok = isNaN(ex.a) ? rep.toLowerCase()===String(ex.a).toLowerCase() : num===ex.a;
+ }
+ scores[key]={ok,note:ok?20:0};
+ const detail=`${ex.q} | Réponse: ${rep} | Correct: ${ex.a} | ${ok?"✅":"❌"}`;
+ sendTravail(tab, ok?20:0, detail);
+ render();
+}
+render(); load();
+setInterval(load,5000);
+</script>
+<script>(function(){var loc=location.href.replace(/#.*$/,"");var ATTR_NAMES=["data-product-id","data-productid","data-product_id","product-id","productid","product_id","data-source-entity-id","source-entity-id","source_entity_id","data-product","data-metadata","data-meta"];var DATASET_KEYS=["productId","productid","product_id","sourceEntityId","sourceentityid","source_entity_id","product","metadata","meta"];function readProductId(value){if(typeof value!=="string"||value.length===0)return null;if(/^[0-9]{6,}$/.test(value))return value;var match=value.match(/(?:product(?:_|-)?id|source(?:_|-)?entity(?:_|-)?id)["'=:\s]+([0-9]{6,})/i);return match?match[1]:null}function extractProductId(start){for(var node=start;node&&node!==document.body;node=node.parentElement){for(var i=0;i<ATTR_NAMES.length;i++){var attrValue=node.getAttribute&&node.getAttribute(ATTR_NAMES[i]);var attrProductId=readProductId(attrValue);if(attrProductId)return attrProductId}var dataset=node.dataset||null;if(dataset){for(var j=0;j<DATASET_KEYS.length;j++){var dataValue=dataset[DATASET_KEYS[j]];var dataProductId=readProductId(dataValue);if(dataProductId)return dataProductId}}}return null}function isInlineMediaSlotElement(node){return !!(node&&node.getAttribute&&node.getAttribute("data-clippy-inline-media-slot")!==null)}function findInlineMediaSlot(start){for(var node=start;node&&node!==document.body;node=node.parentElement){if(isInlineMediaSlotElement(node))return node}return null}function readInlineMediaUrl(node){if(!node)return null;return node.getAttribute&&((node.getAttribute("data-clippy-inline-media-url")||node.getAttribute("data-url")||node.getAttribute("data_url")))||node.href||null}function stripHash(url){return String(url).replace(/#.*$/,"")}function urlsMatch(a,b){if(!a||!b)return false;try{return stripHash(new URL(a,loc).href)===stripHash(new URL(b,loc).href)}catch(_){return stripHash(a)===stripHash(b)}}function isFirstPartyReelUrl(value){try{var url=new URL(value,loc);if(url.protocol!=="https:")return false;var host=url.hostname.toLowerCase();var supported=host==="instagram.com"||host.endsWith(".instagram.com")||host==="facebook.com"||host.endsWith(".facebook.com");return supported&&/\/reels?\//i.test(url.pathname)}catch(_){return false}}function isInlineMediaUrlClick(node,href){var slot=findInlineMediaSlot(node);if(!slot)return false;var slotUrl=readInlineMediaUrl(slot);if(slotUrl)return urlsMatch(href,slotUrl);return isFirstPartyReelUrl(href)}function findDataHref(start){for(var node=start;node&&node!==document.body;node=node.parentElement){if(node.getAttribute){var href=node.getAttribute("data-href")||node.getAttribute("data-url");if(href)return{href:href,node:node}}}return null}var nativeOpen=window.open;window.open=function(url){if(parent!==window&&typeof url==="string"&&/^https?:\/\//.test(url)){parent.postMessage({type:"ecto:usercontent-link-click",href:url},"*");return null}return nativeOpen?nativeOpen.apply(window,arguments):null};document.addEventListener("click",function(e){var target=e.target instanceof Element?e.target:null;if(!target)return;if(parent===window)return;var a=target.closest?target.closest("a[href]"):null;if(a&&a.href&&/^https?:\/\//.test(a.href)&&a.href.replace(/#.*$/,"")!==loc){if(isInlineMediaUrlClick(a,a.href))return;var productId=extractProductId(target)||extractProductId(a);if(productId){e.preventDefault();parent.postMessage({type:"ecto-artifact-link-click",productId:productId},"*");return}e.preventDefault();parent.postMessage({type:"ecto:usercontent-link-click",href:a.href},"*");return}var dataHref=findDataHref(target);if(dataHref&&/^https?:\/\//.test(dataHref.href)&&dataHref.href.replace(/#.*$/,"")!==loc){if(isInlineMediaUrlClick(dataHref.node,dataHref.href))return;e.preventDefault();parent.postMessage({type:"ecto:usercontent-link-click",href:dataHref.href},"*")}},true)})();</script><script>(function(){var FOCUS_TYPE="ecto:artifact-focus-request";var CLOSE_TYPE="ecto:artifact-close-request";function focusArtifactDocument(){var body=document.body;if(!body)return;try{window.focus();}catch(e){}if(!body.hasAttribute("tabindex"))body.setAttribute("tabindex","-1");try{body.focus({preventScroll:true});}catch(e){try{body.focus();}catch(e2){}}}window.addEventListener("message",function(event){if(event.source!==window.parent)return;var data=event.data;if(!data||typeof data!=="object"||data.type!==FOCUS_TYPE)return;if(document.readyState==="loading"){document.addEventListener("DOMContentLoaded",focusArtifactDocument,{once:true});return;}focusArtifactDocument();});window.addEventListener("keydown",function(event){if(event.key!=="Escape")return;window.setTimeout(function(){if(event.defaultPrevented)return;window.parent.postMessage({type:CLOSE_TYPE},"*");},0);});})();</script></body>
+</html>
